@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>siemnest — one server, full SIEM</title>
+<style>
+  :root { --bg:#0a0f1a; --card:#111a2c; --ink:#e8ecf8; --mut:#93a0c4; --acc:#5b8def; --ok:#39d98a; --warn:#f5b544; --bad:#f56464; }
+  * { box-sizing:border-box; margin:0; padding:0; }
+  body { font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif; background:var(--bg); color:var(--ink); min-height:100vh; display:flex; flex-direction:column; align-items:center; padding:2.5rem 1rem; }
+  header { text-align:center; margin-bottom:2rem; }
+  .logo { font-size:2.1rem; font-weight:800; letter-spacing:-.02em; }
+  .logo span { color:var(--acc); }
+  .tag { color:var(--mut); margin-top:.4rem; }
+  .ai { width:100%; max-width:980px; background:var(--card); border:1px solid #223056; border-radius:14px; padding:1.5rem; margin-bottom:1.4rem; }
+  .ai h2 { font-size:1.1rem; margin-bottom:.8rem; }
+  .verdict { font-weight:800; text-transform:uppercase; letter-spacing:.05em; }
+  .v-quiet,.v-normal { color:var(--ok); } .v-attention { color:var(--warn); } .v-critical { color:var(--bad); }
+  #summary { color:var(--mut); line-height:1.5; margin-top:.5rem; }
+  #state { color:var(--mut); font-size:.75rem; margin-top:.8rem; }
+  .grid { display:grid; gap:1.1rem; width:100%; max-width:980px; grid-template-columns:repeat(auto-fit,minmax(270px,1fr)); }
+  .card { background:var(--card); border:1px solid #223056; border-radius:14px; padding:1.5rem; }
+  .card h2 { font-size:1.1rem; margin-bottom:.5rem; }
+  .card p { color:var(--mut); font-size:.88rem; line-height:1.5; margin-bottom:1rem; }
+  .btn { display:inline-block; background:var(--acc); color:#08101e; text-decoration:none; font-weight:800; padding:.7rem 1.1rem; border-radius:10px; font-size:.92rem; width:100%; text-align:center; }
+  footer { margin-top:2.4rem; color:var(--mut); font-size:.78rem; text-align:center; }
+</style>
+</head>
+<body>
+<header>
+  <div class="logo">siem<span>nest</span></div>
+  <div class="tag">Graylog + Wazuh + AI correlation. One server, one data plane.</div>
+</header>
+
+<div class="ai">
+  <h2>🤖 AI Analyst — <span class="verdict v-normal" id="verdict">waiting for first analysis…</span></h2>
+  <div id="summary">The AI analyst polls both SIEM sources, correlates events, and publishes a verdict here.</div>
+  <div id="state"></div>
+</div>
+
+<div class="grid">
+  <div class="card">
+    <h2>🗂️ Graylog</h2>
+    <p>Log management for everything with a syslog output: pipelines, dashboards, streams, alert events. Its indices live on the same OpenSearch data plane as Wazuh.</p>
+    <a class="btn" href="__GRAYLOG_URL__">Open Graylog</a>
+  </div>
+
+  <div class="card">
+    <h2>🛡️ Wazuh Dashboard</h2>
+    <p>Endpoint XDR/SIEM: agent fleet, vulnerability detection, FIM, MITRE mapping. Deploy agents with the manager at <code>127.0.0.1:1514/1515</code>, API at <code>:55000</code>.</p>
+    <a class="btn" href="__DASHBOARD_URL__" target="_blank" rel="noopener">Open Wazuh</a>
+  </div>
+
+  <div class="card">
+    <h2>🤖 AI Analyst API</h2>
+    <p>LLM verdicts over the shared data plane. Point it at any OpenAI-compatible endpoint (local Ollama works). Findings JSON: <code>/api/findings</code>.</p>
+    <a class="btn" href="__AI_URL__/api/findings" target="_blank" rel="noopener">Findings JSON</a>
+  </div>
+</div>
+
+<footer>Self-hosted with ❤️ — services bind to localhost only. This stack is memory-hungry: 6-8 GB RAM recommended.</footer>
+
+<script>
+  async function refreshAI() {
+    try {
+      const r = await fetch("__AI_URL__/api/findings");
+      const d = await r.json();
+      const f = d.findings && d.findings[0];
+      if (f) {
+        const v = document.getElementById("verdict");
+        v.textContent = f.verdict + " (" + (f.priority || "info") + ")";
+        v.className = "verdict v-" + f.verdict;
+        document.getElementById("summary").textContent = f.summary || "";
+        document.getElementById("state").textContent =
+          "events=" + f.event_count + " | last poll=" + new Date(d.state.last_poll * 1000).toLocaleTimeString() +
+          " | llm calls=" + d.state.llm_calls + (d.state.last_error ? " | last error: " + d.state.last_error : "");
+      }
+    } catch {}
+  }
+  refreshAI(); setInterval(refreshAI, 15000);
+</script>
+</body>
+</html>
