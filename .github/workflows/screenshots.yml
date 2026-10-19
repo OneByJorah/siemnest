@@ -22,6 +22,7 @@ jobs:
   screenshots:
     uses: ./.github/workflows/reusable-screenshots.yml
     with:
+      base-url: http://127.0.0.1:8082
       health-url: http://127.0.0.1:8082/healthz
     # To use your self-hosted runner (trusted events only):
     # with:
