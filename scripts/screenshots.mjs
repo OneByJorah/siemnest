@@ -1,6 +1,6 @@
 import { chromium } from "playwright";
 
-const BASE = process.env.SCREENSHOT_BASE || "http://127.0.0.1:8080";
+const BASE = process.env.BASE_URL || process.env.SCREENSHOT_BASE || "http://127.0.0.1:8080";
 const OUT = "docs/screenshots";
 
 const PAGES = [
