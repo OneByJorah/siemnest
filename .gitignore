@@ -13,3 +13,6 @@ coverage/
 .vscode/
 tmp/
 videos/
+
+# wazuh certs are generated locally by install.sh (wazuh-certs-generator)
+wazuh/config/wazuh_indexer_ssl_certs/
