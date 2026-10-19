@@ -1,0 +1,6 @@
+[extend]
+useDefault = true
+
+[allowlist]
+paths = ['''wazuh/config/wazuh_indexer_ssl_certs/''']
+description = "Vendored Wazuh demo certs (self-signed, localhost bootstrap)"

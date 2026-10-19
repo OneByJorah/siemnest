@@ -1,0 +1,2 @@
+# Vendored Wazuh demo certificates (self-signed, localhost-only stack bootstrap)
+wazuh/config/wazuh_indexer_ssl_certs/
