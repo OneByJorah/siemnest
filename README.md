@@ -66,10 +66,10 @@ First boot is heavy (image pulls + indexer bootstrap) — give it 5-10 minutes, 
 
 | Surface | URL |
 | ------- | --- |
-| Portal | `http://127.0.0.1:8080` |
-| Graylog | `http://127.0.0.1:9000` (login `admin` + your `GRAYLOG_ROOT_PASSWORD_SHA2` source password) |
+| Portal | `http://127.0.0.1:8082` |
+| Graylog | `http://127.0.0.1:9091` (login `admin` + your `GRAYLOG_ROOT_PASSWORD_SHA2` source password) |
 | Wazuh Dashboard | `https://127.0.0.1:443` (accept the self-signed cert; `admin` + `INDEXER_ADMIN_PASSWORD`) |
-| AI findings | `http://127.0.0.1:8090/api/findings` |
+| AI findings | `http://127.0.0.1:8091/api/findings` |
 
 ## AI Capability
 

@@ -1,80 +1,12 @@
 name: siemnest
 
+include:
+  - wazuh/docker-compose.yml
+
 # One integrated stack: Graylog (log management) + Wazuh (XDR/SIEM) share a
 # single OpenSearch data plane, and the AI analyst correlates events from both.
 
 services:
-  # ---------------------------------------------------------------- Wazuh side
-  # The indexer IS OpenSearch 2.x (with Wazuh plugins) - it doubles as
-  # Graylog's search backend, so both tools share one data plane.
-  wazuh-manager:
-    image: wazuh/wazuh-manager:4.14.1
-    container_name: siemnest-wazuh-manager
-    restart: unless-stopped
-    environment:
-      INDEXER_URL: https://wazuh-indexer:9200
-      INDEXER_USERNAME: ${INDEXER_ADMIN_USER:-admin}
-      INDEXER_PASSWORD: ${INDEXER_ADMIN_PASSWORD}
-      INDEXER_SSL_CERTIFICATE_FILE: /etc/ssl/erts-indexer.pem
-      INDEXER_SSL_KEY_FILE: /etc/ssl/erts-indexer-key.pem
-      FILEBEAT_SSL_VERIFICATION_MODE: full
-    ports:
-      - "127.0.0.1:1514:1514"
-      - "127.0.0.1:1515:1515"
-      - "127.0.0.1:55000:55000"
-    volumes:
-      - wazuh_api:/var/ossec/api/configuration
-      - wazuh_etc:/var/ossec/etc
-      - wazuh_logs:/var/ossec/logs
-      - wazuh_queue:/var/ossec/queue
-      - wazuh_var:/var/ossec/var
-    depends_on:
-      wazuh-indexer:
-        condition: service_healthy
-    healthcheck:
-      test: ["CMD-SHELL", "/var/ossec/bin/wazuh-control status | grep -q 'wazuh-manager is running'"]
-      interval: 30s
-      timeout: 10s
-      retries: 5
-      start_period: 60s
-    networks:
-      - internal
-
-  wazuh-indexer:
-    image: wazuh/wazuh-indexer:4.14.1
-    container_name: siemnest-wazuh-indexer
-    restart: unless-stopped
-    environment:
-      OPENSEARCH_JAVA_OPTS: -Xms1g -Xmx1g
-      INDEXER_ADMIN_PASSWORD: ${INDEXER_ADMIN_PASSWORD}
-    volumes:
-      - indexer_data:/var/lib/wazuh-indexer
-    healthcheck:
-      test: ["CMD-SHELL", "curl -sk -u ${INDEXER_ADMIN_USER:-admin}:${INDEXER_ADMIN_PASSWORD} https://127.0.0.1:9200/_cluster/health | grep -qE 'green|yellow'"]
-      interval: 20s
-      timeout: 10s
-      retries: 12
-      start_period: 90s
-    networks:
-      - internal
-
-  wazuh-dashboard:
-    image: wazuh/wazuh-dashboard:4.14.1
-    container_name: siemnest-wazuh-dashboard
-    restart: unless-stopped
-    environment:
-      INDEXER_USERNAME: ${INDEXER_ADMIN_USER:-admin}
-      INDEXER_PASSWORD: ${INDEXER_ADMIN_PASSWORD}
-      DASHBOARD_USERNAME: ${DASHBOARD_USER:-kibanaserver}
-      DASHBOARD_PASSWORD: ${DASHBOARD_PASSWORD}
-    ports:
-      - "127.0.0.1:443:443"
-    depends_on:
-      wazuh-indexer:
-        condition: service_healthy
-    networks:
-      - internal
-
   # --------------------------------------------------------------- Graylog side
   mongodb:
     image: mongo:7.0
@@ -88,8 +20,6 @@ services:
       timeout: 5s
       retries: 10
       start_period: 20s
-    networks:
-      - internal
 
   # Graylog stores its indices on the SAME shared OpenSearch data plane
   # (the Wazuh indexer) - one datastore for the whole stack.
@@ -100,27 +30,42 @@ services:
     environment:
       GRAYLOG_PASSWORD_SECRET: ${GRAYLOG_PASSWORD_SECRET}
       GRAYLOG_ROOT_PASSWORD_SHA2: ${GRAYLOG_ROOT_PASSWORD_SHA2}
-      GRAYLOG_HTTP_EXTERNAL_URI: ${GRAYLOG_HTTP_EXTERNAL_URI:-http://127.0.0.1:9000/}
-      GRAYLOG_ELASTICSEARCH_HOSTS: https://${INDEXER_ADMIN_USER:-admin}:${INDEXER_ADMIN_PASSWORD}@wazuh-indexer:9200
+      GRAYLOG_HTTP_EXTERNAL_URI: ${GRAYLOG_HTTP_EXTERNAL_URI:-http://127.0.0.1:9091/}
+      GRAYLOG_ELASTICSEARCH_HOSTS: https://admin:SecretPassword@wazuh.indexer:9200
+      GRAYLOG_ELASTICSEARCH_TLS_CA_FILE: /etc/graylog/root-ca.pem
       GRAYLOG_MONGODB_URI: mongodb://mongodb:27017/graylog
-    entrypoint: /usr/bin/tini -- wait-for-it wazuh-indexer:9200 -- /docker-entrypoint.sh
+      GRAYLOG_SERVER_JAVA_OPTS: -Djavax.net.ssl.trustStore=/shared/cacerts -Djavax.net.ssl.trustStorePassword=changeit
+    entrypoint: /usr/bin/tini -- sh -c "keytool -importcert -noprompt -alias siemnest-ca -file /etc/graylog/root-ca.pem -keystore $$JAVA_HOME/lib/security/cacerts -storepass changeit 2>/dev/null || true; wait-for-it wazuh.indexer:9200 -- /docker-entrypoint.sh"
+    volumes:
+      - ./wazuh/config/wazuh_indexer_ssl_certs/root-ca.pem:/etc/graylog/root-ca.pem:ro
+      - graylog_truststore:/shared
     ports:
-      - "127.0.0.1:9000:9000"
+      - "127.0.0.1:9091:9000"
       - "127.0.0.1:1514:1514/udp"
       - "127.0.0.1:5044:5044"
     depends_on:
       mongodb:
         condition: service_healthy
-      wazuh-indexer:
-        condition: service_healthy
+      wazuh-ca-init:
+        condition: service_completed_successfully
     healthcheck:
-      test: ["CMD-SHELL", "curl -sf http://127.0.0.1:9000/api/system/lbstatus | grep -q ALIVE"]
+      test: ["CMD-SHELL", "curl -sf http://127.0.0.1:9091/api/system/lbstatus | grep -q ALIVE"]
       interval: 30s
       timeout: 10s
       retries: 10
       start_period: 120s
+
+  # One-shot: build a JVM truststore (default cacerts + the indexer CA) for Graylog.
+  wazuh-ca-init:
+    image: graylog/graylog:6.1
+    user: root
+    volumes:
+      - ./wazuh/config/wazuh_indexer_ssl_certs/root-ca.pem:/tmp/root-ca.pem:ro
+      - graylog_truststore:/shared
+    entrypoint: sh -c "cp /opt/java/openjdk/lib/security/cacerts /shared/cacerts && keytool -importcert -noprompt -alias siemnest-ca -file /tmp/root-ca.pem -keystore /shared/cacerts -storepass changeit"
+    restart: "no"
     networks:
-      - internal
+      - default
 
   # ------------------------------------------------------------------ AI layer
   # The AI analyst reads events from BOTH tools through the shared data plane,
@@ -135,16 +80,18 @@ services:
       LLM_BASE_URL: ${LLM_BASE_URL:-http://host.docker.internal:11434/v1}
       LLM_API_KEY: ${LLM_API_KEY:-}
       LLM_MODEL: ${LLM_MODEL:-llama3.1:8b}
-      OPENSEARCH_URL: https://wazuh-indexer:9200
-      OPENSEARCH_USER: ${INDEXER_ADMIN_USER:-admin}
-      OPENSEARCH_PASSWORD: ${INDEXER_ADMIN_PASSWORD}
+      OPENSEARCH_URL: https://wazuh.indexer:9200
+      OPENSEARCH_USER: admin
+      OPENSEARCH_PASSWORD: SecretPassword
       GRAYLOG_API: http://graylog:9000/api
       GRAYLOG_TOKEN: ${GRAYLOG_API_TOKEN:-}
       POLL_SECONDS: "60"
     ports:
-      - "127.0.0.1:8090:8090"
+      - "127.0.0.1:8091:8090"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     depends_on:
-      graylog:
+      mongodb:
         condition: service_healthy
     healthcheck:
       test: ["CMD-SHELL", "wget --spider -q http://127.0.0.1:8090/healthz || exit 1"]
@@ -152,8 +99,6 @@ services:
       timeout: 5s
       retries: 5
       start_period: 20s
-    networks:
-      - internal
 
   # ------------------------------------------------------------------- Portal
   portal:
@@ -167,26 +112,11 @@ services:
       DASHBOARD_URL: ${DASHBOARD_URL:-https://127.0.0.1:443}
       AI_URL: ${AI_URL:-http://127.0.0.1:8090}
     ports:
-      - "127.0.0.1:8080:8080"
-    networks:
-      - internal
+      - "127.0.0.1:8082:8080"
 
-networks:
-  internal:
-    name: siemnest_internal
 
 volumes:
-  indexer_data:
-    name: siemnest_indexer_data
   mongo_data:
     name: siemnest_mongo_data
-  wazuh_api:
-    name: siemnest_wazuh_api
-  wazuh_etc:
-    name: siemnest_wazuh_etc
-  wazuh_logs:
-    name: siemnest_wazuh_logs
-  wazuh_queue:
-    name: siemnest_wazuh_queue
-  wazuh_var:
-    name: siemnest_wazuh_var
+  graylog_truststore:
+    name: siemnest_graylog_truststore

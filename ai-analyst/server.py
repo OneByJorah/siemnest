@@ -95,17 +95,17 @@ def llm_analyze(events):
     deterministic heuristic digest when no LLM endpoint is configured."""
     if not events:
         return {"verdict": "quiet", "summary": "No recent events from either source.", "priority": "info"}
+    wazuh_n = sum(1 for e in events if e["source"] == "wazuh")
+    graylog_n = len(events) - wazuh_n
+    hi = [e for e in events if isinstance(e.get("level"), int) and e["level"] >= 10]
+    digest = (f"{len(events)} events: {wazuh_n} security (Wazuh), {graylog_n} log "
+              f"(Graylog). {len(hi)} high-severity rule hits." if hi else
+              f"{len(events)} events: {wazuh_n} security (Wazuh), {graylog_n} log (Graylog). Nothing high-severity.")
     if not LLM_BASE_URL:
-        wazuh_n = sum(1 for e in events if e["source"] == "wazuh")
-        graylog_n = len(events) - wazuh_n
-        hi = [e for e in events if isinstance(e.get("level"), int) and e["level"] >= 10]
-        verdict = "attention" if hi else "normal"
         return {
-            "verdict": verdict,
+            "verdict": "attention" if hi else "normal",
             "priority": "high" if hi else "info",
-            "summary": (f"{len(events)} events: {wazuh_n} security (Wazuh), {graylog_n} log "
-                        f"(Graylog). {len(hi)} high-severity rule hits." if hi else
-                        f"{len(events)} events: {wazuh_n} security (Wazuh), {graylog_n} log (Graylog). Nothing high-severity."),
+            "summary": digest,
             "model": "heuristic",
         }
     prompt = (
@@ -128,7 +128,7 @@ def llm_analyze(events):
         return json.loads(content[start:end + 1]) if start != -1 else {"verdict": "normal", "summary": content[:400]}
     except Exception as e:  # noqa: BLE001
         STATE["last_error"] = f"llm: {e}"
-        return {"verdict": "normal", "summary": f"LLM unavailable ({e})", "model": "fallback"}
+        return {"verdict": "attention" if hi else "normal", "summary": digest + " (LLM unavailable)", "model": "fallback"}
 
 
 def poll_loop():
@@ -150,6 +150,7 @@ class Handler(BaseHTTPRequestHandler):
     def _send(self, code, ctype, body):
         self.send_response(code)
         self.send_header("Content-Type", ctype)
+        self.send_header("Access-Control-Allow-Origin", "*")
         self.send_header("Content-Length", str(len(body)))
         self.end_headers()
         self.wfile.write(body)
