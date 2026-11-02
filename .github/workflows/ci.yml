@@ -19,6 +19,21 @@ jobs:
       # Add your test command, for example: "npm test --prefix app"
       test-command: ""
 
+  ports:
+    name: Published ports
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+
+      - name: Every published port binds to loopback by default
+        run: |
+          cp .env.example .env
+          docker compose config --format json > compose.json
+          jq -r '.services | to_entries[] | .key as $s | .value.ports[]? | "\($s) \(.host_ip // "ALL"):\(.published)->\(.target)/\(.protocol)"' compose.json
+          jq -e '[.services[].ports[]? | select(.host_ip != "127.0.0.1")] | length == 0' compose.json
+
   certs:
     name: Generated certificates
     runs-on: ubuntu-latest

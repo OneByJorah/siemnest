@@ -92,7 +92,7 @@ Tune `OPENSEARCH_JAVA_OPTS` in `docker-compose.yml` for smaller hosts.
 ## Security Notes
 
 - No secrets in the repo; `.env` is gitignored, `.env.example` ships placeholders.
-- All services bind to `127.0.0.1` — put your own reverse proxy or tunnel in front.
+- All services bind to `127.0.0.1` — put your own reverse proxy or tunnel in front. To enrol agents from other machines, set `WAZUH_AGENT_BIND` to a private address; this opens only the agent ports.
 - The indexer uses self-signed certs inside the stack; keep it off the public internet.
 - TLS certificates are generated per install by `scripts/generate-certs.sh` and are gitignored. After pulling this change on an existing install, run `./install.sh` or `./scripts/generate-certs.sh` before `docker compose up`.
 - Set `ALLOW_REGISTER` style hardening on the UIs once your accounts exist.
