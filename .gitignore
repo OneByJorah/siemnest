@@ -14,3 +14,6 @@ coverage/
 tmp/
 videos/
 
+# Generated per install by scripts/generate-certs.sh. Never commit these.
+wazuh/config/wazuh_indexer_ssl_certs/
+

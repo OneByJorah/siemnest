@@ -3,6 +3,8 @@
 set -euo pipefail
 cd "$(dirname "$0")"
 
+./scripts/generate-certs.sh
+
 if [ ! -f .env ]; then
   cp .env.example .env
   echo "==> Created .env - REQUIRED before starting:"

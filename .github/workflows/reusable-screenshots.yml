@@ -16,6 +16,10 @@ on:
       compose-file:
         type: string
         default: docker-compose.yml
+      setup-command:
+        description: Run before the stack starts, for example to generate certificates.
+        type: string
+        default: ""
       base-url:
         type: string
         default: http://127.0.0.1:8080
@@ -49,6 +53,7 @@ jobs:
       BASE_URL: ${{ inputs.base-url }}
       OUT_DIR: ${{ inputs.output-dir }}
       COMPOSE_FILE_PATH: ${{ inputs.compose-file }}
+      SETUP_COMMAND: ${{ inputs.setup-command }}
       HEALTH_URL: ${{ inputs.health-url }}
       SCREENSHOT_SCRIPT: ${{ inputs.script }}
       BRANCH: ${{ inputs.branch }}
@@ -66,6 +71,7 @@ jobs:
             if [ -f "$COMPOSE_DIR/.env.example" ]; then cp "$COMPOSE_DIR/.env.example" "$COMPOSE_DIR/.env";
             else : > "$COMPOSE_DIR/.env"; fi
           fi
+          if [ -n "$SETUP_COMMAND" ]; then bash -c "$SETUP_COMMAND"; fi
           docker compose -f "$COMPOSE_FILE_PATH" up -d --build
 
       - name: Wait for health

@@ -18,3 +18,45 @@ jobs:
     with:
       # Add your test command, for example: "npm test --prefix app"
       test-command: ""
+
+  certs:
+    name: Generated certificates
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      CERT_DIR: wazuh/config/wazuh_indexer_ssl_certs
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+
+      - name: No certificates are tracked
+        run: test -z "$(git ls-files "$CERT_DIR")"
+
+      - name: Generate, verify the chain, and re-run without changes
+        run: |
+          ./scripts/generate-certs.sh
+          for cert in admin wazuh.indexer wazuh.dashboard; do
+            openssl verify -CAfile "$CERT_DIR/root-ca.pem" "$CERT_DIR/$cert.pem"
+          done
+          before="$(openssl x509 -in "$CERT_DIR/root-ca.pem" -noout -fingerprint -sha256)"
+          ./scripts/generate-certs.sh
+          test "$before" = "$(openssl x509 -in "$CERT_DIR/root-ca.pem" -noout -fingerprint -sha256)"
+          test -z "$(git status --porcelain -- "$CERT_DIR")"
+
+      - name: Indexer serves TLS from the generated CA
+        run: |
+          sudo sysctl -w vm.max_map_count=262144
+          cp .env.example .env
+          docker compose up -d wazuh.indexer
+          for i in $(seq 1 90); do
+            code="$(curl -s -o /dev/null -w '%{http_code}' --cacert "$CERT_DIR/root-ca.pem" \
+              --resolve wazuh.indexer:9200:127.0.0.1 https://wazuh.indexer:9200/ || true)"
+            if [ "$code" = 200 ] || [ "$code" = 401 ]; then echo "indexer answered $code"; exit 0; fi
+            sleep 2
+          done
+          docker compose logs --tail=100 wazuh.indexer
+          echo "Indexer did not answer over TLS"; exit 1
+
+      - name: Graylog truststore builds from the generated CA
+        run: docker compose run --rm wazuh-ca-init
