@@ -6,6 +6,7 @@ Thanks for helping. Small, focused changes get merged fastest.
 
 ```bash
 cp .env.example .env
+./scripts/generate-certs.sh
 docker compose up -d --build
 ```
 

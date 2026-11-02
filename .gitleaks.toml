@@ -1,6 +1,8 @@
 [extend]
 useDefault = true
 
+# The one commit that vendored Wazuh demo keys, now removed. Only that commit is
+# excluded, so any key added in future fails the scan. Delete this if history is rewritten.
 [allowlist]
-paths = ['''wazuh/config/wazuh_indexer_ssl_certs/''']
-description = "Vendored Wazuh demo certs (self-signed, localhost bootstrap)"
+commits = ["4c9d33a2e7a0fa186a42551e7c6701e35516b68b"]
+description = "Historical Wazuh demo keys, removed from the tree"

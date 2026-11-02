@@ -48,7 +48,7 @@ analysis:
 ```bash
 git clone https://github.com/OneByJorah/siemnest.git
 cd siemnest
-./install.sh          # creates .env and tells you exactly what to fill in
+./install.sh          # generates TLS certificates, creates .env and tells you what to fill in
 ```
 
 Required in `.env` (generate with `openssl rand -hex`):
@@ -94,6 +94,7 @@ Tune `OPENSEARCH_JAVA_OPTS` in `docker-compose.yml` for smaller hosts.
 - No secrets in the repo; `.env` is gitignored, `.env.example` ships placeholders.
 - All services bind to `127.0.0.1` — put your own reverse proxy or tunnel in front.
 - The indexer uses self-signed certs inside the stack; keep it off the public internet.
+- TLS certificates are generated per install by `scripts/generate-certs.sh` and are gitignored. After pulling this change on an existing install, run `./install.sh` or `./scripts/generate-certs.sh` before `docker compose up`.
 - Set `ALLOW_REGISTER` style hardening on the UIs once your accounts exist.
 
 ## Repository Layout
