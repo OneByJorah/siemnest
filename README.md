@@ -48,26 +48,17 @@ analysis:
 ```bash
 git clone https://github.com/OneByJorah/siemnest.git
 cd siemnest
-./install.sh          # generates TLS certificates, creates .env and tells you what to fill in
+./install.sh          # generates secrets and certificates, then starts everything
 ```
 
-Required in `.env` (generate with `openssl rand -hex`):
-
-- `INDEXER_ADMIN_PASSWORD`, `DASHBOARD_PASSWORD`
-- `GRAYLOG_PASSWORD_SECRET` (≥64 chars), `GRAYLOG_ROOT_PASSWORD_SHA2` (`echo -n 'pw' | sha256sum`)
-
-Then:
-
-```bash
-docker compose up -d --build
-```
+Your passwords are in `.env`, which is gitignored. To choose your own, copy `.env.example` to `.env` and set them before running `./install.sh`.
 
 First boot is heavy (image pulls + indexer bootstrap) — give it 5-10 minutes, then:
 
 | Surface | URL |
 | ------- | --- |
 | Portal | `http://127.0.0.1:8082` |
-| Graylog | `http://127.0.0.1:9091` (login `admin` + your `GRAYLOG_ROOT_PASSWORD_SHA2` source password) |
+| Graylog | `http://127.0.0.1:9091` (login `admin` + `GRAYLOG_ROOT_PASSWORD` from `.env`) |
 | Wazuh Dashboard | `https://127.0.0.1:443` (accept the self-signed cert; `admin` + `INDEXER_ADMIN_PASSWORD`) |
 | AI findings | `http://127.0.0.1:8091/api/findings` |
 
@@ -91,7 +82,8 @@ Tune `OPENSEARCH_JAVA_OPTS` in `docker-compose.yml` for smaller hosts.
 
 ## Security Notes
 
-- No secrets in the repo; `.env` is gitignored, `.env.example` ships placeholders.
+- No secrets in the repo. `scripts/generate-secrets.sh` gives each install its own passwords in `.env`, which is gitignored.
+- Passwords only take effect on first boot. An install started before this change keeps its old passwords in its Docker volumes until they are rotated or the volumes are recreated, which deletes its data.
 - All services bind to `127.0.0.1` — put your own reverse proxy or tunnel in front. To enrol agents from other machines, set `WAZUH_AGENT_BIND` to a private address; this opens only the agent ports.
 - The indexer uses self-signed certs inside the stack; keep it off the public internet.
 - TLS certificates are generated per install by `scripts/generate-certs.sh` and are gitignored. After pulling this change on an existing install, run `./install.sh` or `./scripts/generate-certs.sh` before `docker compose up`.

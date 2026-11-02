@@ -5,9 +5,7 @@ Thanks for helping. Small, focused changes get merged fastest.
 ## Run it locally
 
 ```bash
-cp .env.example .env
-./scripts/generate-certs.sh
-docker compose up -d --build
+./install.sh
 ```
 
 The app listens on `http://127.0.0.1:8080`. Stop it with `docker compose down -v`.

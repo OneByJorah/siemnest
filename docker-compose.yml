@@ -31,7 +31,7 @@ services:
       GRAYLOG_PASSWORD_SECRET: ${GRAYLOG_PASSWORD_SECRET}
       GRAYLOG_ROOT_PASSWORD_SHA2: ${GRAYLOG_ROOT_PASSWORD_SHA2}
       GRAYLOG_HTTP_EXTERNAL_URI: ${GRAYLOG_HTTP_EXTERNAL_URI:-http://127.0.0.1:9091/}
-      GRAYLOG_ELASTICSEARCH_HOSTS: https://admin:SecretPassword@wazuh.indexer:9200
+      GRAYLOG_ELASTICSEARCH_HOSTS: https://admin:${INDEXER_ADMIN_PASSWORD}@wazuh.indexer:9200
       GRAYLOG_ELASTICSEARCH_TLS_CA_FILE: /etc/graylog/root-ca.pem
       GRAYLOG_MONGODB_URI: mongodb://mongodb:27017/graylog
       GRAYLOG_SERVER_JAVA_OPTS: -Djavax.net.ssl.trustStore=/shared/cacerts -Djavax.net.ssl.trustStorePassword=changeit
@@ -82,7 +82,7 @@ services:
       LLM_MODEL: ${LLM_MODEL:-llama3.1:8b}
       OPENSEARCH_URL: https://wazuh.indexer:9200
       OPENSEARCH_USER: admin
-      OPENSEARCH_PASSWORD: SecretPassword
+      OPENSEARCH_PASSWORD: ${INDEXER_ADMIN_PASSWORD}
       GRAYLOG_API: http://graylog:9000/api
       GRAYLOG_TOKEN: ${GRAYLOG_API_TOKEN:-}
       POLL_SECONDS: "60"
