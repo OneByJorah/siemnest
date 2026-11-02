@@ -35,9 +35,9 @@ jobs:
           jq -e '[.services[].ports[]? | select(.host_ip != "127.0.0.1")] | length == 0' compose.json
 
   certs:
-    name: Generated certificates
+    name: Generated certificates and secrets
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 30
     env:
       CERT_DIR: wazuh/config/wazuh_indexer_ssl_certs
     steps:
@@ -59,10 +59,16 @@ jobs:
           test "$before" = "$(openssl x509 -in "$CERT_DIR/root-ca.pem" -noout -fingerprint -sha256)"
           test -z "$(git status --porcelain -- "$CERT_DIR")"
 
+      - name: Generated secrets are complete and untracked
+        run: |
+          ./scripts/generate-secrets.sh
+          if grep -E '=<' .env; then echo 'Unfilled placeholder in .env'; exit 1; fi
+          test -z "$(git status --porcelain -- wazuh/config)"
+          if git grep -nE 'SecretPassword|MyS3cr37P450r' -- ':!CHANGELOG.md' ':!.github/workflows/ci.yml'; then echo 'Default password still in the repo'; exit 1; fi
+
       - name: Indexer serves TLS from the generated CA
         run: |
           sudo sysctl -w vm.max_map_count=262144
-          cp .env.example .env
           docker compose up -d wazuh.indexer
           for i in $(seq 1 90); do
             code="$(curl -s -o /dev/null -w '%{http_code}' --cacert "$CERT_DIR/root-ca.pem" \
@@ -75,3 +81,33 @@ jobs:
 
       - name: Graylog truststore builds from the generated CA
         run: docker compose run --rm wazuh-ca-init
+
+      - name: Old and demo passwords are rejected, new ones work
+        run: |
+          env_get() { grep -E "^$1=" .env | tail -n 1 | cut -d= -f2-; }
+          status() { curl -s -o /dev/null -w '%{http_code}' --cacert "$CERT_DIR/root-ca.pem" --resolve wazuh.indexer:9200:127.0.0.1 -u "$1" https://wazuh.indexer:9200/; }
+          test "$(status "admin:$(env_get INDEXER_ADMIN_PASSWORD)")" = 200
+          test "$(status "kibanaserver:$(env_get DASHBOARD_PASSWORD)")" = 200
+          test "$(status admin:SecretPassword)" = 401
+          test "$(status kibanaserver:kibanaserver)" = 401
+          test "$(status kibanaro:kibanaro)" = 401
+
+      - name: Whole stack comes up on generated certificates and secrets
+        run: |
+          env_get() { grep -E "^$1=" .env | tail -n 1 | cut -d= -f2-; }
+          API_PASSWORD="$(env_get WAZUH_API_PASSWORD)"
+          docker compose up -d --build
+          wait_for() {
+            for i in $(seq 1 180); do
+              if "${@:2}" >/dev/null 2>&1; then echo "$1 ready after $((i * 5))s"; return 0; fi
+              sleep 5
+            done
+            echo "$1 did not come up"; docker compose ps; docker compose logs --tail=60; return 1
+          }
+          manager() { curl -fsk -u "wazuh-wui:$API_PASSWORD" -X POST https://127.0.0.1:55000/security/user/authenticate; }
+          dashboard() { curl -fsk https://127.0.0.1:443/app/login; }
+          graylog() { curl -fs http://127.0.0.1:9091/api/system/lbstatus | grep -q ALIVE; }
+          wait_for "Wazuh manager API" manager
+          wait_for "Wazuh dashboard" dashboard
+          wait_for "Graylog" graylog
+          docker compose exec -T wazuh.manager filebeat test output

@@ -6,7 +6,7 @@ Instructions for AI coding agents (OpenCode, Freebuff/Codebuff, Hermes workers, 
 
 - **What it is:** replace with one sentence.
 - **Stack:** replace (language, framework, runtime).
-- **Run locally:** `cp .env.example .env && ./scripts/generate-certs.sh && docker compose up -d --build`, then open `http://127.0.0.1:8080`.
+- **Run locally:** `./install.sh`, then open `http://127.0.0.1:8080`.
 - **Health check:** `GET /healthz` must return 200.
 
 ## Commands
